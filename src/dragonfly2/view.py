@@ -29,6 +29,9 @@ class DragonflyWindow(QtWidgets.QWidget):
         self.tabs = QtWidgets.QTabWidget()
         self.design_tab = DesignTabWidget()
         self.tabs.addTab(self.design_tab, 'Design')
+        self.console_tab = LogConsoleWidget()
+        self.tabs.addTab(self.console_tab, 'Console')
+
 
         self._main_layout.addWidget(self.tabs)
 
@@ -193,3 +196,39 @@ class SetJointRotateWidget(QtWidgets.QWidget):
     def clear_orients(self):
         for x in cmds.ls(sl=True, type='joint'):
             cmds.setAttr(x + '.jointOrient', 0, 0, 0)
+
+
+class RigBuilderWidget(QtWidgets.QWidget):
+    def __init__(self, parent=None):
+        super(RigBuilderWidget, self).__init__(parent=parent)
+
+        self.tabs = QtWidgets.QTabWidget()
+        self.tabs.addTab(QtWidgets.QWidget(), 'Build')
+        self.tabs.addTab(QtWidgets.QWidget(), 'Logs')
+
+        self._main_layout = QtWidgets.QVBoxLayout(self)
+        self._main_layout.addWidget(self.tabs)
+
+
+class BuildViewWidget(QtWidgets.QWidget):
+    def __init__(self, parent=None):
+        super(BuildViewWidget, self).__init__(parent=parent)
+
+        self.build_tree = QtWidgets.QTreeWidget()
+        self.action_button = QtWidgets.QPushButton('Build')
+
+        self._main_layout = QtWidgets.QVBoxLayout(self)
+        self._main_layout.addWidget(self.build_tree)
+        self._main_layout.addWidget(self.action_button)
+
+
+class LogConsoleWidget(QtWidgets.QWidget):
+    def __init__(self, parent=None):
+        super(LogConsoleWidget, self).__init__(parent=parent)
+
+        self.browser = QtWidgets.QTextBrowser()
+        self.browser.setFontFamily('New Courier')
+        self.browser.setPlaceholderText('Ready..')
+
+        self._main_layout = QtWidgets.QVBoxLayout(self)
+        self._main_layout.addWidget(self.browser)
