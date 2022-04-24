@@ -1,6 +1,9 @@
 from PySide2 import QtWidgets, QtCore, QtGui
 from shiboken2 import wrapInstance
 from maya import OpenMayaUI, cmds
+import logging
+
+LOG = logging.getLogger()
 
 
 def get_maya_window():
@@ -24,16 +27,36 @@ class DragonflyWindow(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super(DragonflyWindow, self).__init__(parent=parent)
 
-        self._main_layout = QtWidgets.QVBoxLayout(self)
+        self._main_layout = QtWidgets.QHBoxLayout(self)
 
-        self.tabs = QtWidgets.QTabWidget()
-        self.design_tab = DesignTabWidget()
-        self.tabs.addTab(self.design_tab, 'Design')
-        self.console_tab = LogConsoleWidget()
-        self.tabs.addTab(self.console_tab, 'Console')
+        self.design_btn = QtWidgets.QPushButton('Design')
+        self.design_btn.clicked.connect(lambda x=0: self.set_page(0))
+        self.design_btn.setChecked(True)
+        self.build_btn = QtWidgets.QPushButton('Build')
+        self.build_btn.clicked.connect(lambda x=1: self.set_page(1))
 
+        selector_layout = QtWidgets.QVBoxLayout()
+        selector_layout.setContentsMargins(0,0,0,0)
+        selector_layout.setSpacing(5)
+        selector_layout.setAlignment(QtCore.Qt.AlignTop)
+        selector_layout.addWidget(self.design_btn)
+        selector_layout.addWidget(self.build_btn)
+        self._main_layout.addLayout(selector_layout)
 
-        self._main_layout.addWidget(self.tabs)
+        self.pages = QtWidgets.QStackedWidget()
+        self._main_layout.addWidget(self.pages)
+
+        self.design_page = DesignTabWidget()
+        self.pages.insertWidget(0, self.design_page)
+
+        self.build_page = BuildTabWidget()
+        self.pages.insertWidget(1, self.build_page)
+
+    def set_page(self, page_index):
+        self.pages.setCurrentIndex(page_index)
+
+    def sizeHint(self):
+        return QtCore.QSize(850, 500)
 
 
 class DesignTabWidget(QtWidgets.QWidget):
@@ -188,7 +211,7 @@ class SetJointRotateWidget(QtWidgets.QWidget):
         pcp = False
         if self.exclude_children_checkbox.isChecked():
             pcp = True
-        cmds.rotate(*rot, *selected, r=True, pcp=pcp)
+        cmds.rotate(rot, selected, r=True, pcp=pcp)
 
     def freeze_joints(self):
         cmds.makeIdentity(cmds.ls(sl=True, type='joint'), apply=True, t=False, r=True, s=True)
@@ -198,37 +221,155 @@ class SetJointRotateWidget(QtWidgets.QWidget):
             cmds.setAttr(x + '.jointOrient', 0, 0, 0)
 
 
-class RigBuilderWidget(QtWidgets.QWidget):
+class QtLogger(logging.Handler):
+    def __init__(self, log_widget, level=logging.INFO):
+        super(QtLogger, self).__init__(level=level)
+        self.log_widget = log_widget
+
+    def emit(self, record):
+        msg = self.format(record)
+
+        if record.levelno == logging.DEBUG:
+            msg = '<font color="green">[DEBUG]: {}</font>'.format(msg)
+        elif record.levelno == logging.WARNING:
+            msg = '<font color="yellow">[WARNING]: {}</font>'.format(msg)
+        elif record.levelno == logging.ERROR:
+            msg = '<font color="red">[ERROR]: {}</font>'.format(msg)
+        else:
+            msg = '<font color="green">[INFO]: {}</font>'.format(msg)
+
+        self.log_widget.append(msg)
+
+
+class BuildConsoleWidget(QtWidgets.QWidget):
     def __init__(self, parent=None):
-        super(RigBuilderWidget, self).__init__(parent=parent)
-
-        self.tabs = QtWidgets.QTabWidget()
-        self.tabs.addTab(QtWidgets.QWidget(), 'Build')
-        self.tabs.addTab(QtWidgets.QWidget(), 'Logs')
-
-        self._main_layout = QtWidgets.QVBoxLayout(self)
-        self._main_layout.addWidget(self.tabs)
-
-
-class BuildViewWidget(QtWidgets.QWidget):
-    def __init__(self, parent=None):
-        super(BuildViewWidget, self).__init__(parent=parent)
-
-        self.build_tree = QtWidgets.QTreeWidget()
-        self.action_button = QtWidgets.QPushButton('Build')
-
-        self._main_layout = QtWidgets.QVBoxLayout(self)
-        self._main_layout.addWidget(self.build_tree)
-        self._main_layout.addWidget(self.action_button)
-
-
-class LogConsoleWidget(QtWidgets.QWidget):
-    def __init__(self, parent=None):
-        super(LogConsoleWidget, self).__init__(parent=parent)
+        super(BuildConsoleWidget, self).__init__(parent=parent)
 
         self.browser = QtWidgets.QTextBrowser()
         self.browser.setFontFamily('New Courier')
         self.browser.setPlaceholderText('Ready..')
+        self.browser.setOpenExternalLinks(True)
+        self.browser.setReadOnly(True)
 
         self._main_layout = QtWidgets.QVBoxLayout(self)
+        self._main_layout.setAlignment(QtCore.Qt.AlignTop)
+        self._main_layout.setSpacing(3)
+        self._main_layout.setContentsMargins(3, 3, 3, 3)
         self._main_layout.addWidget(self.browser)
+
+
+class MayaUrlReceiver(QtCore.QObject):
+    @QtCore.Slot(QtCore.QUrl)
+    def receive(self, url):
+        if url.host() == 'scene':
+            self.open_scene(url.path())
+
+    def open_scene(self, path):
+        LOG.debug('Opening Maya scene from URL: {}'.format(path))
+        cmds.file(path, o=True, f=True, iv=True)
+
+
+mayaReceiver = MayaUrlReceiver()
+QtGui.QDesktopServices.setUrlHandler('maya', mayaReceiver, 'receive')
+
+
+class BuildManageWidget(QtWidgets.QWidget):
+    def __init__(self, parent=None):
+        super(BuildManageWidget, self).__init__(parent=parent)
+
+        self._main_layout = QtWidgets.QVBoxLayout(self)
+
+        self.add_group_btn = QtWidgets.QPushButton('Add Group')
+        self.add_task_btn = QtWidgets.QPushButton('Add Task')
+
+        sub_layout = QtWidgets.QHBoxLayout()
+        sub_layout.addWidget(self.add_group_btn)
+        sub_layout.addWidget(self.add_task_btn)
+        self._main_layout.addLayout(sub_layout)
+
+        self.rig_tree = QtWidgets.QTreeWidget()
+        self.rig_tree.setHeaderLabel('Rig Build')
+        self.rig_tree.header().hide()
+        self.rig_tree.setDragDropMode(QtWidgets.QAbstractItemView.DragDrop)
+        self.rig_tree.setDefaultDropAction(QtCore.Qt.MoveAction)
+        self.rig_tree.setDropIndicatorShown(True)
+        self.rig_tree.setAcceptDrops(True)
+        self.rig_tree.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self._main_layout.addWidget(self.rig_tree)
+
+
+class BuildPropertyWidget(QtWidgets.QWidget):
+    def __init__(self, parent=None):
+        super(BuildPropertyWidget, self).__init__(parent=parent)
+
+        # Configure header.
+        self.name_field = QtWidgets.QLineEdit()
+        self.debug_button = QtWidgets.QPushButton('debug')
+        self.debug_button.setToolTip('Toggle on Task debug logs.')
+        self.options_button = QtWidgets.QPushButton('opts')
+        self.options_button.setToolTip('Show Task content menu.')
+        header_layout = QtWidgets.QHBoxLayout()
+        header_layout.addWidget(self.name_field)
+        header_layout.addWidget(self.debug_button)
+        header_layout.addWidget(self.options_button)
+
+        self.settings_widget = QtWidgets.QWidget()
+        self.settings_layout = QtWidgets.QFormLayout(self.settings_widget)
+
+        self.scroll = QtWidgets.QScrollArea(self)
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setWidget(self.settings_widget)
+
+        self._main_layout = QtWidgets.QVBoxLayout(self)
+        self._main_layout.setAlignment(QtCore.Qt.AlignTop)
+        self._main_layout.setSpacing(5)
+        self._main_layout.setContentsMargins(10, 10, 10, 10)
+        self._main_layout.addLayout(header_layout)
+        self._main_layout.addWidget(self.scroll)
+
+
+class BuildTabWidget(QtWidgets.QWidget):
+    def __init__(self, parent=None):
+        super(BuildTabWidget, self).__init__(parent=parent)
+
+        self._main_layout = QtWidgets.QHBoxLayout(self)
+
+        self.new_bp_action = QtWidgets.QAction('New Blueprint', self)
+        self.save_bp_action = QtWidgets.QAction('Save', self)
+        self.open_bp_action = QtWidgets.QAction('Open', self)
+        self.append_bp_action = QtWidgets.QAction('Append', self)
+        self.reload_tasks_action = QtWidgets.QAction('Reload Tasks', self)
+
+        self.bp_menu = QtWidgets.QMenu('Blueprints')
+        self.bp_menu.addAction(self.new_bp_action)
+        self.bp_menu.addAction(self.open_bp_action)
+        self.bp_menu.addAction(self.save_bp_action)
+        self.bp_menu.addAction(self.append_bp_action)
+        self.bp_menu.addAction(self.reload_tasks_action)
+
+        self.build_action = QtWidgets.QAction('Build', self)
+        self.debug_build_action = QtWidgets.QAction('Debug Build', self)
+        self.reset_build_action = QtWidgets.QAction('Reset', self)
+        self.step_forward_action = QtWidgets.QAction('Step Forward', self)
+        self.step_back_action = QtWidgets.QAction('Step Back', self)
+
+        self.run_menu = QtWidgets.QMenu('Run')
+        self.run_menu.addAction(self.build_action)
+        self.run_menu.addAction(self.debug_build_action)
+        self.run_menu.addAction(self.reset_build_action)
+        self.run_menu.addAction(self.step_forward_action)
+        self.run_menu.addAction(self.step_back_action)
+
+        self.menubar = QtWidgets.QMenuBar(self)
+        self.menubar.addMenu(self.bp_menu)
+        self.menubar.addMenu(self.run_menu)
+        self._main_layout.setMenuBar(self.menubar)
+
+        self.manage_widget = BuildManageWidget()
+        self._main_layout.addWidget(self.manage_widget)
+
+        self.prop_widget = BuildPropertyWidget()
+        self._main_layout.addWidget(self.prop_widget)
+
+        self.console_widget = BuildConsoleWidget()
+        self._main_layout.addWidget(self.console_widget)
