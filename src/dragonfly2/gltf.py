@@ -1,59 +1,59 @@
 import json
+import math
+from maya import cmds
 from maya.api import OpenMaya
 
 
-class GLTF(object):
+class GLTFExporter(object):
+    @classmethod
+    def export_camera(cls, cam):
+        inst = cls()
+
+        # Get GLTF camera data.
+        gltf_camera = {
+            'name': cam
+        }
+        is_ortho_cam = cmds.getAttr(cam + '.orthographic')
+        near_clipping_plane = cmds.getAttr(cam + '.nearClipPlane')
+        far_clipping_plane = cmds.getAttr(cam + '.farClipPlane')
+
+        if not is_ortho_cam:
+            gltf_camera['type'] = 'perspective'
+            gltf_camera['perspective'] = {
+                'zfar': far_clipping_plane,
+                'znear': near_clipping_plane,
+                'aspectRatio': cmds.getAttr('defaultResolution.deviceAspectRatio'),
+                'yfov': (cmds.camera(cam, q=True, vfv=True) * math.pi) / 180
+            }
+        else:
+            gltf_camera['type'] = 'orthographic'
+            gltf_camera['orthographic'] = {
+                'zfar': far_clipping_plane,
+                'znear': near_clipping_plane,
+                'xmag': max(0.01, cmds.getAttr(cam + '.orthographicWidth')),
+                'ymag': max(0.01, cmds.camera(cam + '.orthographicWidth'))
+            }
+
     def __init__(self):
-        self.asset = Asset()
-        self.scene = 0
-        self.scenes = []
-        self.nodes = []
-        self.meshes = []
-        self.buffers = []
-        self.bufferViews = []
-        self.accessors = []
+        self.output_folder = None
+        self.output_name = None
+        self.data = {
+            'asset': {
+                'generator': 'com.dragonfly2.gltf',
+                'version': '2.0'
+            }
+        }
 
 
-class Asset(object):
-    def __init__(self):
-        self.generator = 'dragonfly2',
-        self.version = '2.0'
 
+    def set_output_folder(self, path):
+        self.output_folder = path
 
-class Scene(object):
-    def __init__(self):
-        self.nodes = []
-        self.name = 'New Scene'
+    def set_output_name(self, name):
+        self.output_name = name
 
-
-class Node(object):
-    def __init__(self):
-        self.mesh = -1
-        self.matrix = OpenMaya.MMatrix()
-        self.skin = -1
-        self.children = []
-        self.rotation = [0, 0, 0]
-        self.scale = [1, 1, 1]
-        self.translation = [0, 0, 0]
-        self.weights = []
-        self.name = 'New Node'
-
-
-class Mesh(object):
-    def __init__(self):
+    def save_gltf(self):
         pass
 
-
-class Buffer(object):
-    def __init__(self):
-        pass
-
-
-class BufferView(object):
-    def __init__(self):
-        pass
-
-
-class Accessor(object):
-    def __init__(self):
+    def save_glb(self):
         pass
