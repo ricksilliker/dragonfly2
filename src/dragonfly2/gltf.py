@@ -1,13 +1,18 @@
 import json
+import logging
 import math
 from maya import cmds
 from maya.api import OpenMaya
 
 
+LOG = logging.getLogger(__name__)
+
+
 class GLTFExporter(object):
-    @classmethod
-    def export_camera(cls, cam):
-        inst = cls()
+    def append_camera(self, cam):
+        # Create GLTF object or load camera data into existing one.
+        if 'cameras' not in self.data:
+            self.data['cameras'] = []
 
         # Get GLTF camera data.
         gltf_camera = {
@@ -34,26 +39,38 @@ class GLTFExporter(object):
                 'ymag': max(0.01, cmds.camera(cam + '.orthographicWidth'))
             }
 
+        self.data['cameras'].append(gltf_camera)
+
+        # Add node data.
+        gltf_node = {
+            'camera': len(self.data['cameras']) - 1,
+            'translation': list(cmds.getAttr(cam + '.translate')),
+            'rotation': list(cmds.getAttr(cam + '.rotate')),
+            'scale': list(cmds.getAttr(cam + '.scale'))
+        }
+
+        self.data['nodes'].append(gltf_node)
+
+        # Add scene data.
+        self.data['scenes'][0]['nodes'].append(len(self.data['nodes']) - 1)
+
+        LOG.info(self.data)
+
     def __init__(self):
-        self.output_folder = None
-        self.output_name = None
         self.data = {
             'asset': {
                 'generator': 'com.dragonfly2.gltf',
                 'version': '2.0'
-            }
+            },
+            'scene': 0,
+            'scenes': [
+                {'nodes': []}
+            ],
+            'nodes': []
         }
 
-
-
-    def set_output_folder(self, path):
-        self.output_folder = path
-
-    def set_output_name(self, name):
-        self.output_name = name
-
-    def save_gltf(self):
+    def save_gltf(self, name, path):
         pass
 
-    def save_glb(self):
+    def save_glb(self, name, path):
         pass
