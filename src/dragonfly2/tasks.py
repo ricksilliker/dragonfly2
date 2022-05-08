@@ -1,6 +1,7 @@
 import os
 import logging
 import yaml
+from abc import ABCMeta, abstractmethod
 
 
 LOG = logging.getLogger(__name__)
@@ -39,3 +40,23 @@ def load_task(directory):
 
     with open(config_file, 'r') as cfg:
         cfg_data = yaml.safe_load(cfg)
+
+
+class RigTask(object):
+    __metaclass__ = ABCMeta
+
+    def __init__(self):
+        self.logger = logging.getLogger()
+        self.props = []
+
+    @property
+    @abstractmethod
+    def prop_config(self):
+        return {}
+
+    def override_form(self, form):
+        pass
+
+    @abstractmethod
+    def run(self, ctx):
+        raise NotImplementedError

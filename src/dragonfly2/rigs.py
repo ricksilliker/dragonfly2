@@ -45,12 +45,3 @@ class AbstractRig(object):
                 return
 
 
-class RigTask(object):
-    __metaclass__ = ABCMeta
-
-    def __init__(self):
-        self.logger = logging.getLogger()
-
-    @abstractmethod
-    def run(self):
-        raise NotImplementedError
